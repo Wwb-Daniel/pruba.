@@ -471,22 +471,23 @@ const UploadForm: React.FC = () => {
 
       {/* Audio Upload Modal */}
       {showAudioUpload && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-900 rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold">Upload Audio Track</h2>
-                <button
-                  onClick={() => setShowAudioUpload(false)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-              <AudioUploadForm />
-            </div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
+          onClick={() => setShowAudioUpload(false)}
+        >
+          <div onClick={e => e.stopPropagation()}>
+            <AudioUploadForm 
+              onClose={() => setShowAudioUpload(false)}
+              onUploadSuccess={() => {
+                setShowAudioUpload(false);
+                // Aquí puedes agregar lógica adicional después de una subida exitosa
+              }}
+            />
           </div>
-        </div>
+        </motion.div>
       )}
     </div>
   );
