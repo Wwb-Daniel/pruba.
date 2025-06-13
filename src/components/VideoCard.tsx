@@ -1,13 +1,12 @@
-import { useVideoStore } from '../../store/videoStore';
-import { Video } from '../../types/video';
+import React from 'react';
+import { Video } from '@/stores/videoStore';
 
 interface VideoCardProps {
   video: Video;
-  onVideoClick: (video: Video) => void;
   className?: string;
 }
 
-export function VideoCard({ video, onVideoClick, className }: VideoCardProps) {
+export function VideoCard({ video, className }: VideoCardProps) {
   return (
     <div className={`relative aspect-[9/16] rounded-lg overflow-hidden ${className}`}>
       <video

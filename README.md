@@ -1,60 +1,74 @@
-# Procesador de Video y Audio
+# OmniPlay - Modern Video Sharing Platform
 
-Una aplicación web moderna para procesar archivos de video y audio, construida con React, TypeScript y Vite.
+OmniPlay is a modern video sharing application built with React, TypeScript, and Supabase. It provides a TikTok-like experience where users can upload, view, and interact with short-form videos.
 
-## 🚀 Características
+## Features
 
-- Procesamiento de video y audio
-- Gestión de perfiles de usuario
-- Almacenamiento seguro de archivos
-- Interfaz moderna y responsiva
-- Soporte para múltiples formatos
+- Complete user authentication (sign up, login)
+- Video upload and playback
+- Infinite scroll video feed
+- User profiles
+- Video interactions (likes, comments)
+- Search functionality
+- Responsive design for all devices
 
-## 🛠️ Tecnologías
+## Tech Stack
 
-- React 18
-- TypeScript
-- Vite
-- TailwindCSS
-- Supabase
-- FFmpeg.wasm
-- Framer Motion
+- **Frontend:** React, TypeScript, TailwindCSS, Framer Motion
+- **Backend:** Supabase (Authentication, Database, Storage)
+- **State Management:** Zustand
+- **Routing:** React Router
+- **Build Tool:** Vite
 
-## 📦 Instalación
+## Getting Started
 
-1. Clona el repositorio:
-```bash
-git clone https://github.com/tu-usuario/video-audio-processor.git
-cd video-audio-processor
-```
+1. Clone the repository
+2. Install dependencies:
+   ```
+   npm install
+   ```
+3. Set up environment variables by copying `.env.example` to `.env` and adding your Supabase credentials
 
-2. Instala las dependencias:
-```bash
-npm install
-```
+4. Start the development server:
+   ```
+   npm run dev
+   ```
 
-3. Crea un archivo `.env` en la raíz del proyecto con las siguientes variables:
-```env
-VITE_SUPABASE_URL=tu_url_de_supabase
-VITE_SUPABASE_ANON_KEY=tu_clave_anonima_de_supabase
-```
+## Supabase Setup
 
-4. Inicia el servidor de desarrollo:
-```bash
-npm run dev
-```
+Before running the application, you need to set up Supabase:
 
-## 🏗️ Scripts Disponibles
+1. Create a new Supabase project
+2. Run the SQL migration in `supabase/migrations/create_initial_schema.sql`
+3. Set up Storage bucket (REQUIRED):
+   - Go to Storage in your Supabase dashboard
+   - Click "Create new bucket"
+   - Name the bucket exactly "videos" (case-sensitive)
+   - Enable public access for the bucket
+   - Set the following CORS configuration for the bucket:
+     ```json
+     {
+       "cors_rules": [
+         {
+           "allowed_origins": ["*"],
+           "allowed_methods": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+           "allowed_headers": ["*"],
+           "expose_headers": ["Content-Range", "Range"],
+           "max_age_seconds": 3000
+         }
+       ]
+     }
+     ```
+4. Update the `.env` file with your Supabase URL and anon key
 
-- `npm run dev` - Inicia el servidor de desarrollo
-- `npm run build` - Construye la aplicación para producción
-- `npm run preview` - Vista previa de la build de producción
-- `npm run lint` - Ejecuta el linter
+## Project Structure
 
-## 📝 Licencia
+- `/src/components` - React components organized by feature
+- `/src/pages` - Page components for different routes
+- `/src/lib` - Utility functions and shared code
+- `/src/store` - Zustand stores for state management
+- `/supabase` - Supabase migrations and configuration
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
+## License
 
-## 🤝 Contribuciones
-
-Las contribuciones son bienvenidas. Por favor, abre un issue primero para discutir los cambios que te gustaría hacer.
+MIT

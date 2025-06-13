@@ -1,26 +1,18 @@
-import React, { useState, useRef, ChangeEvent, FormEvent, MouseEvent } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { motion } from 'framer-motion';
 
-interface Profile {
-  username: string;
-  bio?: string;
-  avatar_url?: string;
-}
-
 interface EditProfileModalProps {
-  profile: Profile;
+  profile: {
+    username: string;
+    bio?: string;
+    avatar_url?: string;
+  };
   onClose: () => void;
   onUpdate: () => void;
-}
-
-interface FormData {
-  username: string;
-  bio: string;
-  avatar_url: string;
 }
 
 const EditProfileModal: React.FC<EditProfileModalProps> = ({
@@ -28,7 +20,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
   onClose,
   onUpdate,
 }) => {
-  const [formData, setFormData] = useState<FormData>({
+  const [formData, setFormData] = useState({
     username: profile.username,
     bio: profile.bio || '',
     avatar_url: profile.avatar_url || '',
@@ -44,7 +36,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
     setPreviewUrl(url);
   };
 
-  const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -106,7 +98,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
     }
   };
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -135,17 +127,15 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
     }
   };
 
-  const handleClickOutside = (e: MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) onClose();
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
-      onClick={handleClickOutside}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <motion.div
         initial={{ scale: 0.95 }}
@@ -204,7 +194,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
                 label="URL de Avatar (opcional)"
                 placeholder="Ingresa una URL de imagen o sube una"
                 value={formData.avatar_url}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => handleAvatarChange(e.target.value)}
+                onChange={(e) => handleAvatarChange(e.target.value)}
                 fullWidth
               />
               <p className="text-xs text-gray-500 mt-1">
@@ -216,7 +206,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
           <Input
             label="Nombre de Usuario"
             value={formData.username}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, username: e.target.value })}
+            onChange={(e) => setFormData({ ...formData, username: e.target.value })}
             fullWidth
             required
           />
@@ -227,7 +217,7 @@ const EditProfileModal: React.FC<EditProfileModalProps> = ({
             </label>
             <textarea
               value={formData.bio}
-              onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, bio: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
               className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={4}
               placeholder="Cuéntanos sobre ti..."

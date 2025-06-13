@@ -1,27 +1,17 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useVideoStore } from '../../store/videoStore';
 import VideoPlayer from './VideoPlayer';
 import { motion } from 'framer-motion';
-import { supabase } from '../../lib/supabase';
-import { Video } from '../../types/video';
-
-interface FetchVideosParams {
-  page: number;
-  limit: number;
-  category?: string;
-  userId?: string;
-}
 
 const VideoFeed: React.FC = () => {
-  const { videos, fetchVideos, loading, error, hasMore } = useVideoStore();
-  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
+  const { videos, loading, error, hasMore, fetchVideos } = useVideoStore();
+  const [currentIndex, setCurrentIndex] = useState(0);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   
   // Initialize videos
   useEffect(() => {
-    fetchVideos({ page: 1, limit: 10 });
+    fetchVideos();
   }, [fetchVideos]);
   
   // Set up infinite scroll
@@ -51,26 +41,16 @@ const VideoFeed: React.FC = () => {
   }, [videos.length, hasMore, loading, fetchVideos]);
   
   // Handle video scrolling
-  const handleScroll = useCallback(() => {
-    if (!containerRef.current) return;
-
-    const container = containerRef.current;
-    const scrollPosition = container.scrollTop;
-    const videoHeight = container.clientHeight;
-    const index = Math.floor(scrollPosition / videoHeight);
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    const scrollTop = container.scrollTop;
+    const videoHeight = window.innerHeight * 0.9; // 90vh height for each video
     
-    if (index !== currentVideoIndex) {
-      setCurrentVideoIndex(index);
+    const newIndex = Math.floor((scrollTop + videoHeight / 2) / videoHeight);
+    if (newIndex !== currentIndex && newIndex >= 0 && newIndex < videos.length) {
+      setCurrentIndex(newIndex);
     }
-  }, [currentVideoIndex]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.addEventListener('scroll', handleScroll);
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
+  };
   
   if (videos.length === 0 && !loading) {
     return (
@@ -82,29 +62,13 @@ const VideoFeed: React.FC = () => {
     );
   }
   
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex justify-center items-center h-screen text-red-500">
-        Error: {error}
-      </div>
-    );
-  }
-  
   return (
     <div className="relative min-h-screen">
       <div 
-        ref={containerRef}
         className="h-screen overflow-y-scroll snap-y snap-mandatory"
+        onScroll={handleScroll}
       >
-        {videos.map((video: Video, index: number) => (
+        {videos.map((video, index) => (
           <motion.div
             key={video.id}
             className="h-[90vh] w-full snap-start flex items-center justify-center relative"
@@ -114,7 +78,7 @@ const VideoFeed: React.FC = () => {
           >
             <VideoPlayer 
               video={video} 
-              isActive={index === currentVideoIndex}
+              isActive={index === currentIndex}
             />
           </motion.div>
         ))}
