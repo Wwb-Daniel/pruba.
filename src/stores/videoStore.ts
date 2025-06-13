@@ -118,11 +118,11 @@ export const useVideoStore = create<VideoStore>((set, get) => ({
 
       if (thumbnailBlob) {
         const { error: thumbnailUploadError } = await supabase.storage
-          .from('thumbnails')
-          .upload(thumbnailPath, thumbnailBlob, {
-            cacheControl: '3600',
+        .from('thumbnails')
+        .upload(thumbnailPath, thumbnailBlob, {
+          cacheControl: '3600',
             upsert: false,
-          });
+        });
 
         if (thumbnailUploadError) throw thumbnailUploadError;
       }

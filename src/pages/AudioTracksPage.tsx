@@ -12,6 +12,25 @@ interface AudioUsage {
   count: number;
 }
 
+interface AudioTrack {
+  id: string;
+  title: string;
+  description: string;
+  audio_url: string;
+  thumbnail_url: string;
+  user_id: string;
+  created_at: string;
+  user: {
+    username: string;
+    avatar_url: string;
+  };
+  related_videos?: {
+    id: string;
+    title: string;
+    thumbnail_url: string;
+  }[];
+}
+
 const AudioTracksPage: React.FC = () => {
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [trendingTracks, setTrendingTracks] = useState<AudioTrack[]>([]);
@@ -181,7 +200,7 @@ const AudioTracksPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
+        {/* Header */}
       <div className="sticky top-0 bg-black bg-opacity-90 backdrop-blur-sm z-40 p-4 border-b border-gray-800">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-4">
@@ -198,7 +217,7 @@ const AudioTracksPage: React.FC = () => {
             Upload Audio
           </Button>
         </div>
-      </div>
+        </div>
 
       <div className="max-w-7xl mx-auto p-4">
         {/* Search Bar */}
@@ -335,55 +354,55 @@ const AudioTracksPage: React.FC = () => {
             {searchQuery ? 'Search Results' : 'All Tracks'}
           </h2>
 
-          {error && (
-            <div className="text-red-500 text-center mb-6 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-              {error}
-            </div>
-          )}
+        {error && (
+          <div className="text-red-500 text-center mb-6 bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+            {error}
+          </div>
+        )}
 
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin h-8 w-8 border-t-2 border-b-2 border-blue-500 rounded-full"></div>
-            </div>
-          ) : audioTracks.length === 0 ? (
-            <div className="text-center py-12">
-              <Music size={64} className="mx-auto text-gray-600 mb-4" />
-              <h3 className="text-xl font-medium mb-2">
-                {searchQuery ? 'No audio tracks found' : 'No audio tracks yet'}
-              </h3>
-              <p className="text-gray-500 mb-6">
-                {searchQuery 
-                  ? 'Try a different search term' 
-                  : 'Upload your first audio track to get started'
-                }
-              </p>
-              {!searchQuery && (
-                <Button onClick={() => setShowUploadForm(true)}>
-                  <Plus className="h-5 w-5 mr-2" />
-                  Upload Audio Track
-                </Button>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {audioTracks.map((track) => (
-                <div
-                  key={track.id}
-                  className="bg-gray-900 rounded-lg p-4 hover:bg-gray-800 transition-colors"
-                >
-                  <div className="flex items-start space-x-4">
-                    <button
-                      onClick={() => handlePlay(track)}
-                      className="flex-shrink-0 w-12 h-12 bg-gradient-to-r from-pink-500 to-purple-500 rounded-full flex items-center justify-center hover:from-pink-600 hover:to-purple-600 transition-colors"
-                    >
-                      {playingTrack === track.id ? (
-                        <Pause className="h-6 w-6 text-white" />
-                      ) : (
-                        <Play className="h-6 w-6 text-white ml-0.5" />
-                      )}
-                    </button>
-                    
-                    <div className="flex-1 min-w-0">
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin h-8 w-8 border-t-2 border-b-2 border-blue-500 rounded-full"></div>
+          </div>
+        ) : audioTracks.length === 0 ? (
+          <div className="text-center py-12">
+            <Music size={64} className="mx-auto text-gray-600 mb-4" />
+            <h3 className="text-xl font-medium mb-2">
+              {searchQuery ? 'No audio tracks found' : 'No audio tracks yet'}
+            </h3>
+            <p className="text-gray-500 mb-6">
+              {searchQuery 
+                ? 'Try a different search term' 
+                : 'Upload your first audio track to get started'
+              }
+            </p>
+            {!searchQuery && (
+              <Button onClick={() => setShowUploadForm(true)}>
+                <Plus className="h-5 w-5 mr-2" />
+                Upload Audio Track
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {audioTracks.map((track) => (
+              <div
+                key={track.id}
+                className="bg-gray-900 rounded-lg p-4 hover:bg-gray-800 transition-colors"
+              >
+                <div className="flex items-start space-x-4">
+                  <button
+                    onClick={() => handlePlay(track)}
+                    className="flex-shrink-0 w-12 h-12 bg-gradient-to-r from-pink-500 to-purple-500 rounded-full flex items-center justify-center hover:from-pink-600 hover:to-purple-600 transition-colors"
+                  >
+                    {playingTrack === track.id ? (
+                      <Pause className="h-6 w-6 text-white" />
+                    ) : (
+                      <Play className="h-6 w-6 text-white ml-0.5" />
+                    )}
+                  </button>
+                  
+                  <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <h3 className="font-medium truncate text-lg">{track.title}</h3>
                         {audioDurations[track.id] && (
@@ -392,82 +411,82 @@ const AudioTracksPage: React.FC = () => {
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-400 mb-2">{track.genre}</p>
-                      
-                      {/* Tags */}
-                      {track.tags && track.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-3">
-                          {track.tags.slice(0, 3).map((tag, index) => (
-                            <span
-                              key={index}
-                              className="text-xs bg-gray-700 px-2 py-1 rounded-full text-gray-300"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                          {track.tags.length > 3 && (
-                            <span className="text-xs text-gray-500">
-                              +{track.tags.length - 3} more
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      
-                      {/* Creator info */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          {track.user_profile?.avatar_url ? (
-                            <img
-                              src={track.user_profile.avatar_url}
-                              alt={track.user_profile.username}
-                              className="w-6 h-6 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center">
-                              <User size={12} />
-                            </div>
-                          )}
-                          <span className="text-xs text-gray-500">
-                            @{track.user_profile?.username}
+                    <p className="text-sm text-gray-400 mb-2">{track.genre}</p>
+                    
+                    {/* Tags */}
+                    {track.tags && track.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {track.tags.slice(0, 3).map((tag, index) => (
+                          <span
+                            key={index}
+                            className="text-xs bg-gray-700 px-2 py-1 rounded-full text-gray-300"
+                          >
+                            #{tag}
                           </span>
-                        </div>
-                        
-                        {/* Use Audio Button */}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleUseAudio(track)}
-                          className="text-xs px-2 py-1"
-                        >
-                          <Video size={12} className="mr-1" />
-                          Use
-                        </Button>
+                        ))}
+                        {track.tags.length > 3 && (
+                          <span className="text-xs text-gray-500">
+                            +{track.tags.length - 3} more
+                          </span>
+                        )}
                       </div>
+                    )}
+                    
+                    {/* Creator info */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        {track.user_profile?.avatar_url ? (
+                          <img
+                            src={track.user_profile.avatar_url}
+                            alt={track.user_profile.username}
+                            className="w-6 h-6 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center">
+                            <User size={12} />
+                          </div>
+                        )}
+                        <span className="text-xs text-gray-500">
+                          @{track.user_profile?.username}
+                        </span>
+                      </div>
+                      
+                      {/* Use Audio Button */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleUseAudio(track)}
+                        className="text-xs px-2 py-1"
+                      >
+                        <Video size={12} className="mr-1" />
+                        Use
+                      </Button>
                     </div>
                   </div>
-                  
-                  {/* Playing indicator */}
-                  {playingTrack === track.id && (
-                    <div className="mt-3 flex items-center space-x-2">
-                      <div className="flex space-x-1">
-                        {[...Array(3)].map((_, i) => (
-                          <div
-                            key={i}
-                            className="w-1 bg-blue-500 rounded-full animate-pulse"
-                            style={{
-                              height: Math.random() * 20 + 10,
-                              animationDelay: `${i * 0.1}s`
-                            }}
-                          />
-                        ))}
-                      </div>
-                      <span className="text-xs text-blue-500">Playing...</span>
-                    </div>
-                  )}
                 </div>
-              ))}
-            </div>
-          )}
+                
+                {/* Playing indicator */}
+                {playingTrack === track.id && (
+                  <div className="mt-3 flex items-center space-x-2">
+                    <div className="flex space-x-1">
+                      {[...Array(3)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="w-1 bg-blue-500 rounded-full animate-pulse"
+                          style={{
+                            height: Math.random() * 20 + 10,
+                            animationDelay: `${i * 0.1}s`
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-xs text-blue-500">Playing...</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         </div>
       </div>
 

@@ -3,10 +3,11 @@ import { supabase } from '../lib/supabase';
 import type { Video, AudioTrack } from '../lib/supabase';
 import { processVideoAudio } from '../lib/audioProcessor';
 import { generateThumbnail } from '../lib/thumbnailGenerator';
+import { Video as VideoType } from '../types/video';
 
 interface VideoState {
-  videos: Video[];
-  currentVideo: Video | null;
+  videos: VideoType[];
+  currentVideo: VideoType | null;
   loading: boolean;
   error: string | null;
   uploadProgress: number;
@@ -14,22 +15,14 @@ interface VideoState {
   uploadError: string | null;
   hasMore: boolean;
   feedType: 'all' | 'following' | 'foryou' | 'explore';
-  fetchVideos: (page: number) => Promise<void>;
-  uploadVideo: (
-    file: File,
-    title: string,
-    description: string,
-    options?: {
-    audioTrackId?: string;
-      videoVolume?: number;
-      audioVolume?: number;
-    }
-  ) => Promise<Video>;
+  fetchVideos: (params: { page: number; limit: number; category?: string; userId?: string }) => Promise<void>;
+  uploadVideo: (file: File, metadata: { title: string; description: string; category?: string }) => Promise<void>;
   updateVideo: (videoId: string, title: string, description: string | null) => Promise<void>;
   deleteVideo: (videoId: string) => Promise<void>;
   likeVideo: (videoId: string) => Promise<void>;
+  unlikeVideo: (videoId: string) => Promise<void>;
   saveVideo: (videoId: string) => Promise<void>;
-  setCurrentVideo: (video: Video | null) => void;
+  setCurrentVideo: (video: VideoType | null) => void;
   setFeedType: (type: 'all' | 'following' | 'foryou' | 'explore') => void;
   marcarVideoVisto: (videoId: string) => Promise<void>;
 }
@@ -69,7 +62,7 @@ export const useVideoStore = create<VideoState>((set, get) => ({
 
   setFeedType: (type) => {
     set({ feedType: type, videos: [], hasMore: true });
-    get().fetchVideos(0);
+    get().fetchVideos({ page: 1, limit: PAGE_SIZE });
   },
 
   marcarVideoVisto: async (videoId: string) => {
@@ -92,395 +85,78 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     }
   },
 
-  fetchVideos: async (page = 0) => {
-    const { videos, feedType } = get();
-    set({ loading: true, error: null });
-    
+  fetchVideos: async (params) => {
     try {
-      const from = page * PAGE_SIZE;
-      const to = from + PAGE_SIZE - 1;
-      
+      set({ loading: true, error: null });
       let query = supabase
         .from('videos')
         .select(`
           *,
-          likes_count,
-          comments_count,
-          views_count,
-          user_profile:profiles!user_id(
-            id, 
-            username, 
-            avatar_url, 
-            is_vip
-          ),
-          audio_track:audio_tracks!audio_track_id(
-            id,
-            title,
-            audio_url,
-            genre,
-            tags,
-            user_id,
-            created_at,
-            updated_at,
-            user_profile:profiles!user_id(id, username, avatar_url)
-          ),
-          video_hashtags(
-            hashtag:hashtags(
-              id,
-              name
-            )
-          ),
-          challenge:challenges(
-            id,
-            name,
-            description
-          )
-        `);
+          user:profiles(*)
+        `)
+        .order('created_at', { ascending: false })
+        .range((params.page - 1) * params.limit, params.page * params.limit - 1);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      switch (feedType) {
-        case 'following':
-          const { data: followingIds } = await supabase
-            .from('follows')
-            .select('following_id')
-            .eq('follower_id', user.id);
-
-          if (followingIds && followingIds.length > 0) {
-            query = query.in('user_id', followingIds.map(f => f.following_id));
-          } else {
-            set({ videos: [], hasMore: false, loading: false });
-            return;
-          }
-          break;
-
-        case 'foryou':
-          // Obtener videos que el usuario ya ha visto
-          const { data: videosVistos } = await supabase
-            .from('videos_vistos')
-            .select('video_id')
-            .eq('user_id', user.id);
-
-          const videosVistosIds = videosVistos?.map(v => v.video_id) || [];
-
-          if (videosVistosIds.length > 0) {
-            // Excluir videos ya vistos
-            query = query.not('id', 'in', videosVistosIds);
-          }
-
-          // Verificar si hay videos no vistos
-          const { data: videosNoVistos, error: checkError } = await supabase
-            .from('videos')
-            .select('id')
-            .not('id', 'in', videosVistosIds)
-            .limit(1);
-
-          if (checkError) throw checkError;
-
-          if (!videosNoVistos || videosNoVistos.length === 0) {
-            set({ 
-              videos: [], 
-              hasMore: false, 
-              loading: false,
-              error: '¡Has visto todos los videos disponibles! Vuelve más tarde para ver contenido nuevo.'
-            });
-            return;
-          }
-
-          // Ordenar por engagement para mostrar los mejores videos primero
-          query = query
-            .order('likes_count', { ascending: false })
-            .order('comments_count', { ascending: false })
-            .order('views_count', { ascending: false })
-            .order('created_at', { ascending: false });
-          break;
-
-        case 'explore':
-          // Include trending hashtags and challenges
-          query = query
-            .order('created_at', { ascending: false })
-            .not('challenge_id', 'is', null);
-          break;
-
-        default:
-          query = query.order('created_at', { ascending: false });
+      if (params.category) {
+        query = query.eq('category', params.category);
       }
 
-      const { data, error } = await query.range(from, to);
-        
+      if (params.userId) {
+        query = query.eq('user_id', params.userId);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
-      
-      // Update likes, comments and views counts
-      const updatedVideos = await Promise.all(data.map(async (video) => {
-        // Get actual likes count
-        const { count: likesCount } = await supabase
-          .from('likes')
-          .select('*', { count: 'exact', head: true })
-          .eq('content_type', 'video')
-          .eq('content_id', video.id);
 
-        // Get actual comments count
-        const { count: commentsCount } = await supabase
-          .from('comments')
-          .select('*', { count: 'exact', head: true })
-          .eq('content_type', 'video')
-          .eq('content_id', video.id);
-
-        // Get actual views count
-        const { count: viewsCount } = await supabase
-          .from('video_views')
-          .select('*', { count: 'exact', head: true })
-          .eq('video_id', video.id);
-
-        // Update video with new counts
-        const { error: updateError } = await supabase
-          .from('videos')
-          .update({ 
-            likes_count: likesCount || 0,
-            comments_count: commentsCount || 0,
-            views_count: viewsCount || 0
-          })
-          .eq('id', video.id);
-
-        if (updateError) {
-          console.error('Error updating video counts:', updateError);
-        }
-
-        return {
-          ...video,
-          likes_count: likesCount || 0,
-          comments_count: commentsCount || 0,
-          views_count: viewsCount || 0
-        };
-      }));
-
-      const newVideos = page === 0 ? updatedVideos : [...videos, ...updatedVideos];
-      set({ 
-        videos: newVideos,
-        hasMore: data.length === PAGE_SIZE,
-      });
-    } catch (error: any) {
-      set({ error: error.message });
-      console.error('Error fetching videos:', error);
-    } finally {
-      set({ loading: false });
+      set({ videos: data || [], loading: false });
+    } catch (error) {
+      set({ error: (error as Error).message, loading: false });
     }
   },
 
-  uploadVideo: async (
-    file: File,
-    title: string,
-    description: string,
-    options: UploadOptions = {}
-  ) => {
+  uploadVideo: async (file, metadata) => {
     try {
-      // Inicializar estado
-      set({ 
-        isUploading: true, 
-        uploadProgress: 0, 
-        uploadError: null,
-        error: null 
-      });
-      console.log('Iniciando subida de video...');
+      set({ loading: true, error: null });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
 
-      // Autenticar usuario
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      if (authError || !user) {
-        throw new Error('Usuario no autenticado');
-      }
-      console.log('Usuario autenticado:', user.id);
-      set({ uploadProgress: 5 });
-
-      // Obtener audio track si se especificó
-      let audioTrack: AudioTrack | null = null;
-      if (options.audioTrackId) {
-        console.log('Obteniendo audio track:', options.audioTrackId);
-        const { data: track, error: trackError } = await supabase
-          .from('audio_tracks')
-          .select('*, user_profile:profiles!user_id(id, username, avatar_url)')
-          .eq('id', options.audioTrackId)
-          .single();
-
-        if (trackError) {
-          throw new Error('Error al obtener el audio track');
-        }
-        audioTrack = track;
-        console.log('Audio track obtenido:', track.title);
-        set({ uploadProgress: 10 });
-      }
-
-      // Procesar el video con el audio
-      console.log('Iniciando procesamiento de audio...');
-      const processedVideo = await processVideoAudio(
-        file,
-        audioTrack,
-        options.videoVolume ?? 0,
-        options.audioVolume ?? 0.5
-      );
-      console.log('Procesamiento de audio completado');
-      set({ uploadProgress: 30 });
-
-      // Generar nombre único para el archivo
-      const timestamp = Date.now();
-      const sanitizedFileName = sanitizeFileName(file.name);
-      const storageFileName = `${user.id}/${timestamp}_${sanitizedFileName}`;
-      
-      // Subir el video procesado con reintentos
-      console.log('Subiendo video a storage...');
-      let uploadAttempts = 0;
-      const MAX_UPLOAD_ATTEMPTS = 3;
-      let uploadError: any = null;
-
-      while (uploadAttempts < MAX_UPLOAD_ATTEMPTS) {
-        try {
-          const { data: videoData, error: currentUploadError } = await supabase.storage
+      // Upload video file
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const { error: uploadError, data: uploadData } = await supabase.storage
         .from('videos')
-            .upload(storageFileName, processedVideo, {
-              cacheControl: '3600',
-              upsert: false,
-              contentType: 'video/webm'
-            });
+        .upload(fileName, file);
 
-          if (currentUploadError) {
-            uploadError = currentUploadError;
-            uploadAttempts++;
-            console.warn(`Intento de subida ${uploadAttempts} fallido:`, currentUploadError);
-            
-            if (uploadAttempts < MAX_UPLOAD_ATTEMPTS) {
-              // Esperar antes de reintentar (tiempo exponencial)
-              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, uploadAttempts)));
-              continue;
-            }
-          } else {
-            uploadError = null;
-            break;
-          }
-        } catch (error) {
-          uploadError = error;
-          uploadAttempts++;
-          console.error(`Error en intento de subida ${uploadAttempts}:`, error);
-          
-          if (uploadAttempts < MAX_UPLOAD_ATTEMPTS) {
-            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, uploadAttempts)));
-            continue;
-          }
-        }
-      }
+      if (uploadError) throw uploadError;
 
-      if (uploadError) {
-        throw new Error(`Error al subir video después de ${MAX_UPLOAD_ATTEMPTS} intentos: ${uploadError.message}`);
-      }
-
-      console.log('Video subido exitosamente');
-      set({ uploadProgress: 60 });
-
-      // Obtener URL pública
-      console.log('Obteniendo URL pública...');
-      const { data: publicUrlData } = supabase.storage
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
         .from('videos')
-        .getPublicUrl(storageFileName);
+        .getPublicUrl(fileName);
 
-      if (!publicUrlData?.publicUrl) {
-        throw new Error('No se pudo obtener la URL pública del video');
-      }
+      // Create video record
+      const { error: insertError, data: videoData } = await supabase
+        .from('videos')
+        .insert({
+          title: metadata.title,
+          description: metadata.description,
+          video_url: publicUrl,
+          user_id: user.id,
+          category: metadata.category,
+          status: 'processing'
+        })
+        .select()
+        .single();
 
-      // Generar thumbnail
-      console.log('Generando thumbnail...');
-      set({ uploadProgress: 70 });
-      const thumbnailBlob = await generateThumbnail(processedVideo);
-      const thumbnailFileName = `${user.id}/${timestamp}_thumbnail.jpg`;
-      
-      // Subir thumbnail con reintentos
-      console.log('Subiendo thumbnail...');
-      let thumbnailAttempts = 0;
-      let thumbnailError: any = null;
+      if (insertError) throw insertError;
 
-      while (thumbnailAttempts < MAX_UPLOAD_ATTEMPTS) {
-        try {
-          const { data: thumbnailData, error: currentThumbnailError } = await supabase.storage
-            .from('thumbnails')
-            .upload(thumbnailFileName, thumbnailBlob, {
-              cacheControl: '3600',
-              upsert: false,
-              contentType: 'image/jpeg'
-            });
-
-          if (currentThumbnailError) {
-            thumbnailError = currentThumbnailError;
-            thumbnailAttempts++;
-            console.warn(`Intento de subida de thumbnail ${thumbnailAttempts} fallido:`, currentThumbnailError);
-            
-            if (thumbnailAttempts < MAX_UPLOAD_ATTEMPTS) {
-              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, thumbnailAttempts)));
-              continue;
-            }
-          } else {
-            thumbnailError = null;
-            break;
-          }
-        } catch (error) {
-          thumbnailError = error;
-          thumbnailAttempts++;
-          console.error(`Error en intento de subida de thumbnail ${thumbnailAttempts}:`, error);
-          
-          if (thumbnailAttempts < MAX_UPLOAD_ATTEMPTS) {
-            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, thumbnailAttempts)));
-            continue;
-          }
-        }
-      }
-
-      if (thumbnailError) {
-        throw new Error(`Error al subir thumbnail después de ${MAX_UPLOAD_ATTEMPTS} intentos: ${thumbnailError.message}`);
-      }
-
-      set({ uploadProgress: 80 });
-
-      const { data: thumbnailUrlData } = supabase.storage
-        .from('thumbnails')
-        .getPublicUrl(thumbnailFileName);
-
-      if (!thumbnailUrlData?.publicUrl) {
-        throw new Error('No se pudo obtener la URL pública del thumbnail');
-      }
-
-      // Insertar metadatos
-      console.log('Insertando metadatos del video...');
-      set({ uploadProgress: 90 });
-      const video = await insertVideoRecord({
-        title,
-        description,
-        video_url: publicUrlData.publicUrl,
-        thumbnail_url: thumbnailUrlData.publicUrl,
-        user_id: user.id,
-        audio_track_id: options.audioTrackId || null,
-        video_volume: options.videoVolume ?? 0,
-        audio_volume: options.audioVolume ?? 0.5
-      });
-
-      // Actualizar lista de videos
-      console.log('Actualizando lista de videos...');
-      await get().fetchVideos(0);
-      console.log('Subida completada exitosamente');
-      set({ 
-        uploadProgress: 100, 
-        isUploading: false,
-        error: null,
-        uploadError: null
-      });
-
-      return video;
+      // Update local state
+      set(state => ({
+        videos: [videoData, ...state.videos],
+        loading: false
+      }));
     } catch (error) {
-      console.error('Error en el proceso de subida:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      set({ 
-        uploadError: errorMessage,
-        error: errorMessage,
-        isUploading: false,
-        uploadProgress: 0
-      });
-      throw error;
+      set({ error: (error as Error).message, loading: false });
     }
   },
 
@@ -497,7 +173,7 @@ export const useVideoStore = create<VideoState>((set, get) => ({
         .eq('id', videoId);
 
       if (error) throw error;
-      await get().fetchVideos(0);
+      await get().fetchVideos({ page: 1, limit: PAGE_SIZE });
     } catch (error: any) {
       set({ error: error.message });
     } finally {
@@ -543,7 +219,7 @@ export const useVideoStore = create<VideoState>((set, get) => ({
       if (deleteError) throw deleteError;
 
       // 4. Actualizar la lista de videos
-      await get().fetchVideos(0);
+      await get().fetchVideos({ page: 1, limit: PAGE_SIZE });
     } catch (error: any) {
       set({ error: error.message });
       console.error('Error eliminando video:', error);
@@ -554,67 +230,63 @@ export const useVideoStore = create<VideoState>((set, get) => ({
 
   likeVideo: async (videoId) => {
     try {
-      const user = (await supabase.auth.getUser()).data.user;
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
-      
-      // Check for existing like
-      const { data: existingLike } = await supabase
-        .from('likes')
-        .select()
-        .eq('user_id', user.id)
-        .eq('content_id', videoId)
-        .eq('content_type', 'video')
-        .maybeSingle();
-        
-      if (!existingLike) {
-        // Add like
-        const { error: insertError } = await supabase
-          .from('likes')
-          .insert({
-            user_id: user.id,
-            content_id: videoId,
-            content_type: 'video',
-            video_id: videoId
-          });
 
-        if (insertError) {
-          // If it's a unique constraint violation, the like already exists
-          if (insertError.code === '23505') {
-            console.log('Like already exists');
-            return;
-          }
-          throw insertError;
-        }
+      const { error } = await supabase
+        .from('video_likes')
+        .insert({ video_id: videoId, user_id: user.id });
 
-        // Get updated counts
-        const { count: likesCount } = await supabase
-          .from('likes')
-          .select('*', { count: 'exact', head: true })
-          .eq('content_type', 'video')
-          .eq('content_id', videoId);
+      if (error) throw error;
 
-        // Update video likes count
-        const { error: updateError } = await supabase
-          .from('videos')
-          .update({ 
-            likes_count: likesCount || 0
-          })
-          .eq('id', videoId);
+      // Update local state
+      const videos = get().videos.map(video => 
+        video.id === videoId 
+          ? { ...video, likes: video.likes + 1 }
+          : video
+      );
+      set({ videos });
 
-        if (updateError) throw updateError;
-
-        // Actualizar el estado local de los videos
-        set((state) => ({
-          videos: state.videos.map(video => 
-            video.id === videoId 
-              ? { ...video, likes_count: likesCount || 0 }
-              : video
-          )
-        }));
+      const currentVideo = get().currentVideo;
+      if (currentVideo?.id === videoId) {
+        set({ currentVideo: { ...currentVideo, likes: currentVideo.likes + 1 } });
       }
     } catch (error) {
-      console.error('Error liking video:', error);
-      throw error;
+      set({ error: (error as Error).message });
+    }
+  },
+
+  unlikeVideo: async (videoId) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { error } = await supabase
+        .from('video_likes')
+        .delete()
+        .match({ video_id: videoId, user_id: user.id });
+
+      if (error) throw error;
+
+      // Update local state
+      const videos = get().videos.map(video => 
+        video.id === videoId 
+          ? { ...video, likes: Math.max(0, video.likes - 1) }
+          : video
+      );
+      set({ videos });
+
+      const currentVideo = get().currentVideo;
+      if (currentVideo?.id === videoId) {
+        set({ 
+          currentVideo: { 
+            ...currentVideo, 
+            likes: Math.max(0, currentVideo.likes - 1) 
+          } 
+        });
+      }
+    } catch (error) {
+      set({ error: (error as Error).message });
     }
   },
 
@@ -649,7 +321,9 @@ export const useVideoStore = create<VideoState>((set, get) => ({
     }
   },
 
-  setCurrentVideo: (video) => set({ currentVideo: video }),
+  setCurrentVideo: (video) => {
+    set({ currentVideo: video });
+  },
 }));
 
 const insertVideoRecord = async (
