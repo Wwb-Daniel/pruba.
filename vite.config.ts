@@ -1,17 +1,17 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { visualizer } from 'rollup-plugin-visualizer';
+import path from 'path';
 
 export default defineConfig({
-  plugins: [
-    react(),
-    visualizer({
-      open: true,
-      gzipSize: true,
-      brotliSize: true,
-    })
-  ],
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src')
+    }
+  },
   build: {
+    outDir: 'dist',
+    sourcemap: false,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -22,9 +22,12 @@ export default defineConfig({
       }
     },
     minify: 'terser',
-    sourcemap: true
+    target: 'es2020'
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom', 'framer-motion', 'lucide-react']
+  },
+  define: {
+    global: 'globalThis'
   }
 });

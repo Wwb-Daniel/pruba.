@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import type { UserProfile } from '../../lib/supabase';
 
 interface FollowersModalProps {
   userId: string;
@@ -12,13 +13,19 @@ interface FollowersModalProps {
   onClose: () => void;
 }
 
-interface UserProfile {
-  id: string;
-  username: string;
-  avatar_url?: string;
-  bio?: string;
-  followers_count: number;
-}
+// Definición correcta del tipo para los datos de perfil
+type ProfileData = {
+    id: string;
+    username: string;
+    avatar_url?: string;
+    bio?: string;
+  };
+
+// Tipo para la respuesta de la base de datos
+type DatabaseItem = {
+  follower?: ProfileData;
+  following?: ProfileData;
+  };
 
 const FollowersModal: React.FC<FollowersModalProps> = ({ userId, type, onClose }) => {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -51,13 +58,11 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ userId, type, onClose }
         query = supabase
           .from('follows')
           .select(`
-            follower_id,
             follower:profiles!follower_id(
               id,
               username,
               avatar_url,
-              bio,
-              followers_count
+              bio
             )
           `)
           .eq('following_id', userId);
@@ -65,27 +70,78 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ userId, type, onClose }
         query = supabase
           .from('follows')
           .select(`
-            following_id,
             following:profiles!following_id(
               id,
               username,
               avatar_url,
-              bio,
-              followers_count
+              bio
             )
           `)
           .eq('follower_id', userId);
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) {
+        console.error('Error en la consulta:', error);
+        throw error;
+      }
 
-      const userProfiles = data?.map(item => 
-        type === 'followers' ? item.follower : item.following
-      ).filter(Boolean) || [];
+      console.log('Datos crudos recibidos:', JSON.stringify(data, null, 2));
+      
+      const userProfiles: UserProfile[] = [];
+      
+      if (data) {
+        try {
+          // Intentamos procesar cada item individualmente
+          const typedData = (data as unknown) as DatabaseItem[];
+          console.log('Datos tipados:', typedData);
+
+          for (const item of typedData) {
+            console.log('Procesando item:', JSON.stringify(item, null, 2));
+            
+            const profileData = type === 'followers' ? item.follower : item.following;
+            console.log('Perfil encontrado:', profileData);
+
+            if (profileData) {
+            // Obtener el conteo de seguidores para este usuario
+            const { count } = await supabase
+              .from('follows')
+              .select('*', { count: 'exact', head: true })
+                .eq('following_id', profileData.id);
+            
+              const profile: UserProfile = {
+                id: profileData.id,
+                username: profileData.username,
+                avatar_url: profileData.avatar_url,
+                bio: profileData.bio,
+              followers_count: count || 0,
+              following_count: 0,
+              created_at: new Date().toISOString()
+              };
+              
+              console.log('Perfil creado:', profile);
+            userProfiles.push(profile);
+            } else {
+              console.warn('No se encontró perfil en el item:', item);
+        }
+      }
+
+          console.log('Total de perfiles procesados:', userProfiles.length);
+      console.log('Perfiles finales:', userProfiles);
+
+          if (userProfiles.length === 0) {
+            console.warn('No se encontraron perfiles para mostrar');
+          }
 
       setUsers(userProfiles);
       setFilteredUsers(userProfiles);
+        } catch (error) {
+          console.error('Error procesando los datos:', error);
+          console.error('Datos que causaron el error:', data);
+        }
+      } else {
+        console.warn('No se recibieron datos de la consulta');
+      }
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -138,7 +194,7 @@ const FollowersModal: React.FC<FollowersModalProps> = ({ userId, type, onClose }
             <div className="p-8 text-center">
               <User size={48} className="mx-auto text-gray-600 mb-4" />
               <p className="text-gray-400">
-                {searchQuery ? 'No users found' : `No ${type} yet`}
+                {searchQuery ? 'No users found' : type === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
               </p>
             </div>
           ) : (

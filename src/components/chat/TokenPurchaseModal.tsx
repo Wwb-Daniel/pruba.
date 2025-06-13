@@ -4,12 +4,12 @@ import { motion } from 'framer-motion';
 import { supabase } from '../../lib/supabase';
 import Button from '../ui/Button';
 
-interface TokenPurchaseModalProps {
+export interface TokenPurchaseModalProps {
   onClose: () => void;
-  onSuccess: () => void;
+  onPurchaseSuccess?: () => void | Promise<void>;
 }
 
-const TokenPurchaseModal: React.FC<TokenPurchaseModalProps> = ({ onClose, onSuccess }) => {
+const TokenPurchaseModal: React.FC<TokenPurchaseModalProps> = ({ onClose, onPurchaseSuccess }) => {
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'paypal' | 'card'>('paypal');
   const [loading, setLoading] = useState(false);
@@ -62,7 +62,9 @@ const TokenPurchaseModal: React.FC<TokenPurchaseModalProps> = ({ onClose, onSucc
         alert('Por favor realiza el pago a la tarjeta: 5360 5810 9481 3898');
       }
 
-      onSuccess();
+      if (onPurchaseSuccess) {
+        await onPurchaseSuccess();
+      }
       onClose();
     } catch (error) {
       console.error('Error al procesar la compra:', error);

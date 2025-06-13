@@ -67,6 +67,7 @@ export const useAuthStore = create<AuthState>((set) => ({
                 .insert({
                   user_id: session.user.id,
                   private_account: false,
+                  receive_notifications: true,
                 });
             }
           }
@@ -112,6 +113,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           .insert({
             user_id: data.user.id,
             private_account: false,
+            receive_notifications: true,
           });
 
         if (settingsError) throw settingsError;

@@ -28,8 +28,66 @@ interface ChatState {
   unsubscribeFromChats: () => void;
 }
 
+interface ActorProfile {
+  id: string;
+  username: string;
+  avatar_url: string | null;
+}
+
+interface NotificationWithActor extends Notification {
+  actor_profile?: ActorProfile;
+}
+
 export const useNotificationStore = create<NotificationState>((set, get) => {
   let notificationSubscription: any = null;
+  let isSubscribed = false;
+  let retryCount = 0;
+  const MAX_RETRIES = 3;
+
+  const setupSubscription = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Limpiar suscripción existente si hay una
+      if (notificationSubscription) {
+        await supabase.removeChannel(notificationSubscription);
+        notificationSubscription = null;
+        isSubscribed = false;
+      }
+
+      // Crear nueva suscripción
+      notificationSubscription = supabase
+        .channel('notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            get().fetchNotifications();
+          }
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            isSubscribed = true;
+            retryCount = 0; // Resetear contador de reintentos
+          } else if (status === 'CLOSED' && retryCount < MAX_RETRIES) {
+            retryCount++;
+            setTimeout(() => setupSubscription(), 1000 * retryCount); // Reintentar con backoff exponencial
+          }
+        });
+    } catch (error) {
+      console.error('Error setting up notification subscription:', error);
+      if (retryCount < MAX_RETRIES) {
+        retryCount++;
+        setTimeout(() => setupSubscription(), 1000 * retryCount);
+      }
+    }
+  };
 
   return {
     notifications: [],
@@ -46,8 +104,14 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
         const { data, error } = await supabase
           .from('notifications')
           .select(`
-            *,
-            actor_profile:profiles!actor_id(*)
+            id,
+            user_id,
+            type,
+            content_id,
+            actor_id,
+            read,
+            created_at,
+            actor_profile:profiles!fk_notifications_actor(id, username, avatar_url)
           `)
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
@@ -55,9 +119,20 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
 
         if (error) throw error;
 
-        const unreadCount = data?.filter(n => !n.read).length || 0;
-        set({ notifications: data || [], unreadCount });
+        // Asegurarnos de que los datos tienen el formato correcto
+        const formattedData = (data || []).map((notification: any) => ({
+          ...notification,
+          actor_profile: notification.actor_profile ? {
+            id: notification.actor_profile.id,
+            username: notification.actor_profile.username,
+            avatar_url: notification.actor_profile.avatar_url
+          } as ActorProfile : undefined
+        })) as NotificationWithActor[];
+
+        const unreadCount = formattedData.filter(n => !n.read).length;
+        set({ notifications: formattedData, unreadCount });
       } catch (error: any) {
+        console.error('Error fetching notifications:', error);
         set({ error: error.message });
       } finally {
         set({ loading: false });
@@ -97,33 +172,21 @@ export const useNotificationStore = create<NotificationState>((set, get) => {
     },
 
     subscribeToNotifications: () => {
-      const setupSubscription = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        notificationSubscription = supabase
-          .channel('notifications')
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'notifications',
-              filter: `user_id=eq.${user.id}`,
-            },
-            () => {
-              get().fetchNotifications();
-            }
-          )
-          .subscribe();
-      };
-
+      if (isSubscribed) return;
       setupSubscription();
     },
 
-    unsubscribeFromNotifications: () => {
+    unsubscribeFromNotifications: async () => {
       if (notificationSubscription) {
-        supabase.removeChannel(notificationSubscription);
+        try {
+          await supabase.removeChannel(notificationSubscription);
+        } catch (error) {
+          console.error('Error unsubscribing from notifications:', error);
+        } finally {
+          notificationSubscription = null;
+          isSubscribed = false;
+          retryCount = 0;
+        }
       }
     },
   };

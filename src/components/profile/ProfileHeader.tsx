@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, MessageCircle, Users, Heart } from 'lucide-react';
+import { User, MessageCircle, Users, Heart, UserX } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useUserStore } from '../../store/userStore';
 import { useProfileStore } from '../../store/profileStore';
@@ -8,6 +8,8 @@ import ChatPanel from '../chat/ChatPanel';
 import FollowersModal from './FollowersModal';
 import ProfileVisitors from './ProfileVisitors';
 import { AnimatePresence } from 'framer-motion';
+import { supabase } from '../../lib/supabase';
+import { toast } from 'react-toastify';
 
 interface ProfileHeaderProps {
   profile: {
@@ -30,6 +32,8 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, onEditClick }) =
   const [followingCount, setFollowingCount] = useState(0);
   const [totalLikes, setTotalLikes] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blocking, setBlocking] = useState(false);
   const isCurrentUser = user?.id === profile.id;
 
   useEffect(() => {
@@ -40,6 +44,19 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, onEditClick }) =
           // Record profile visit if not current user
           if (!isCurrentUser) {
             await recordProfileVisit(profile.id);
+            // Check if current user has blocked this profile
+            const { data, error } = await supabase
+              .from('blocked_users')
+              .select('id')
+              .eq('user_id', user?.id)
+              .eq('blocked_user_id', profile.id)
+              .single();
+
+            if (error && error.code !== 'PGRST116') {
+              // PGRST116 means no rows found, which is fine.
+              throw error;
+            }
+            setIsBlocked(!!data);
           }
 
           const [followStatus, followers, following, stats] = await Promise.all([
@@ -53,8 +70,9 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, onEditClick }) =
           setFollowersCount(followers);
           setFollowingCount(following);
           setTotalLikes(stats.totalLikes);
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error loading profile data:', error);
+          toast.error(`Error al cargar datos del perfil: ${error.message}`);
         } finally {
           setLoading(false);
         }
@@ -62,10 +80,14 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, onEditClick }) =
     };
     
     loadProfileData();
-  }, [profile.id, isFollowing, getFollowersCount, getFollowingCount, getProfileStats, recordProfileVisit, isCurrentUser]);
+  }, [profile.id, isFollowing, getFollowersCount, getFollowingCount, getProfileStats, recordProfileVisit, isCurrentUser, user?.id]);
 
   const handleFollowClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!user) {
+      toast.error('Debes iniciar sesión para seguir a usuarios.');
+      return;
+    }
     if (following) {
       await unfollowUser(profile.id);
       setFollowersCount(prev => prev - 1);
@@ -74,6 +96,51 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, onEditClick }) =
       setFollowersCount(prev => prev + 1);
     }
     setFollowing(!following);
+  };
+
+  const handleBlockUser = async () => {
+    if (!user) {
+      toast.error('Debes iniciar sesión para bloquear usuarios.');
+      return;
+    }
+    setBlocking(true);
+    try {
+      if (isBlocked) {
+        // Unblock user
+        const { error } = await supabase
+          .from('blocked_users')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('blocked_user_id', profile.id);
+
+        if (error) throw error;
+        setIsBlocked(false);
+        toast.success('Usuario desbloqueado.');
+      } else {
+        // Block user
+        const { error } = await supabase
+          .from('blocked_users')
+          .insert({
+            user_id: user.id,
+            blocked_user_id: profile.id,
+          });
+
+        if (error) throw error;
+        setIsBlocked(true);
+        // Si bloqueamos a alguien, dejamos de seguirlo y no podemos enviarle mensajes.
+        if (following) {
+          await unfollowUser(profile.id);
+          setFollowing(false);
+          setFollowersCount(prev => prev - 1);
+        }
+        toast.success('Usuario bloqueado.');
+      }
+    } catch (error: any) {
+      console.error('Error blocking/unblocking user:', error);
+      toast.error(`Error al ${isBlocked ? 'desbloquear' : 'bloquear'} usuario: ${error.message}`);
+    } finally {
+      setBlocking(false);
+    }
   };
 
   const formatCount = (count: number): string => {
@@ -185,6 +252,16 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({ profile, onEditClick }) =
               >
                 <MessageCircle size={18} className="mr-2" />
                 Message
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBlockUser}
+                disabled={blocking}
+                className={isBlocked ? 'text-red-400 hover:bg-red-500/10' : ''}
+              >
+                <UserX size={18} className="mr-2" />
+                {blocking ? (isBlocked ? 'Desbloqueando...' : 'Bloqueando...') : (isBlocked ? 'Desbloquear' : 'Bloquear')}
               </Button>
             </>
           )}

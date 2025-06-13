@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { UserProfile, Video } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
@@ -11,6 +11,7 @@ import VideoViewer from '../components/video/VideoViewer';
 import ProfileHeader from '../components/profile/ProfileHeader';
 import { AnimatePresence } from 'framer-motion';
 import { UserAudioTracks } from '../components/profile/UserAudioTracks';
+import { toast } from 'react-toastify';
 
 type TabType = 'videos' | 'likes' | 'saved' | 'audios';
 
@@ -24,11 +25,28 @@ const ProfilePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>('videos');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [isBlockedByCurrentUser, setIsBlockedByCurrentUser] = useState(false);
+
+  // Obtener el tab activo de la URL o establecer 'videos' como predeterminado
+  const getActiveTabFromUrl = (): TabType => {
+    const tab = searchParams.get('tab') as TabType;
+    if (['videos', 'likes', 'saved', 'audios'].includes(tab)) {
+      return tab;
+    }
+    return 'videos';
+  };
+
+  const [activeTab, setActiveTab] = useState<TabType>(getActiveTabFromUrl());
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const navigate = useNavigate();
   
   const isCurrentUser = user?.id === id;
+
+  useEffect(() => {
+    // Actualizar el parámetro de la URL cuando el tab activo cambie
+    setSearchParams({ tab: activeTab });
+  }, [activeTab, setSearchParams]);
 
   const fetchProfileData = async () => {
     if (!id) {
@@ -40,6 +58,27 @@ const ProfilePage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
+      setIsBlockedByCurrentUser(false);
+
+      // Check if current user has blocked this profile
+      if (user && user.id !== id) { // Don't check if blocking self
+        const { data: blockedData, error: blockedError } = await supabase
+          .from('blocked_users')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('blocked_user_id', id)
+          .single();
+
+        if (blockedError && blockedError.code !== 'PGRST116') { // PGRST116 means no rows found
+          throw blockedError;
+        }
+        if (blockedData) {
+          setIsBlockedByCurrentUser(true);
+          setError('Este usuario ha sido bloqueado por ti.');
+          setLoading(false);
+          return;
+        }
+      }
 
       // Fetch profile data
       const { data: profileData, error: profileError } = await supabase
@@ -175,7 +214,7 @@ const ProfilePage: React.FC = () => {
 
   useEffect(() => {
     fetchProfileData();
-  }, [id, isCurrentUser]);
+  }, [id, isCurrentUser, user?.id]);
 
   if (loading) {
     return (
@@ -185,12 +224,12 @@ const ProfilePage: React.FC = () => {
     );
   }
 
-  if (error || !profile) {
+  if (error || !profile || isBlockedByCurrentUser) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 text-center bg-black">
         <Grid size={64} className="text-gray-500 mb-4" />
         <h2 className="text-xl font-bold text-white">{error || 'Profile not found'}</h2>
-        <p className="text-gray-500 mb-6">The profile you're looking for doesn't exist or is unavailable.</p>
+        <p className="text-gray-500 mb-6">{isBlockedByCurrentUser ? 'Este perfil no está disponible para ti.' : 'The profile you\'re looking for doesn\'t exist or is unavailable.'}</p>
         <Button variant="outline" onClick={() => navigate('/')}>
           Go to Home
         </Button>
@@ -233,25 +272,23 @@ const ProfilePage: React.FC = () => {
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2">
         {videos.map((video) => (
-          <button
+          <div
             key={video.id}
-            onClick={() => setSelectedVideo(video)}
-            className="aspect-[9/16] relative bg-gray-900 overflow-hidden rounded-lg group"
-          >
-            <video
-              src={video.video_url}
-              className="absolute inset-0 w-full h-full object-cover"
+            className="relative w-full aspect-[9/16] bg-gray-800 rounded-lg overflow-hidden cursor-pointer group"
+            onClick={() => setSelectedVideo(video)}>
+            <img
+              src={video.thumbnail_url || '/placeholder.jpg'}
+              alt={video.title}
+              className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-              <div className="absolute bottom-0 left-0 right-0 p-2">
-                <h4 className="text-sm font-medium truncate">{video.title}</h4>
-                <div className="flex items-center text-xs text-gray-300 mt-1">
+            <div className="absolute inset-0 bg-black bg-opacity-25 group-hover:bg-opacity-40 transition-opacity flex flex-col justify-end p-2 sm:p-3">
+              <p className="text-white text-xs sm:text-sm font-medium line-clamp-2 mb-1">{video.title}</p>
+              <div className="flex items-center text-gray-300 text-xs">
                   <Eye size={12} className="mr-1" />
-                  {video.views_count} views
-                </div>
+                <span>{video.views_count}</span>
               </div>
             </div>
-          </button>
+          </div>
         ))}
       </div>
     );
@@ -273,91 +310,111 @@ const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black pb-16 md:pb-0">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="py-4 flex items-center">
-          <Link to="/" className="text-gray-400 hover:text-white mr-4">
-            <ArrowLeft size={24} />
+    <div className="min-h-screen bg-black text-white">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between py-4">
+          <Link 
+            to="/"
+            className="text-gray-300 hover:text-white transition-colors flex items-center"
+          >
+            <ArrowLeft size={20} className="mr-2" />
+            Volver
           </Link>
-          <h1 className="text-xl font-bold">Profile</h1>
+          {profile && (
+            <h1 className="text-2xl font-bold">@{profile.username}</h1>
+          )}
+          <div className="w-16" /> {/* Spacer for alignment */}
         </div>
         
+        {profile && (
         <ProfileHeader
           profile={profile}
           onEditClick={() => setShowEditModal(true)}
         />
-        
-        <div className="border-t border-gray-800">
-          <div className="flex justify-around p-2 border-b border-gray-800">
+        )}
+
+        {profile && !isCurrentUser && (
+          <div className="flex justify-center space-x-4 mb-6">
+            {/* Additional buttons like Message and Block could go here */}
+          </div>
+        )}
+
+        {profile && (
+          <div className="border-b border-gray-700 mb-6">
+            <div className="flex">
+              <div className="flex-1 text-center">
             <button
-              className={`flex items-center justify-center flex-1 py-2 space-x-2 ${
-                activeTab === 'videos' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-500'
+                  className={`py-2 px-4 w-full text-sm font-medium transition-colors duration-200 ${
+                    activeTab === 'videos' ? 'border-b-2 border-blue-500 text-white' : 'text-gray-400 hover:text-white'
               }`}
               onClick={() => setActiveTab('videos')}
             >
-              <Grid size={20} />
-              <span className="text-sm font-medium">Videos</span>
+                  <Grid size={20} className="inline-block mr-2" />
+                  Videos
             </button>
-            
-            {isCurrentUser && (
-              <>
+              </div>
+              <div className="flex-1 text-center">
                 <button
-                  className={`flex items-center justify-center flex-1 py-2 space-x-2 ${
-                    activeTab === 'audios' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-500'
+                  className={`py-2 px-4 w-full text-sm font-medium transition-colors duration-200 ${
+                    activeTab === 'audios' ? 'border-b-2 border-blue-500 text-white' : 'text-gray-400 hover:text-white'
                   }`}
                   onClick={() => setActiveTab('audios')}
                 >
-                  <Music size={20} />
-                  <span className="text-sm font-medium">Mis Audios</span>
+                  <Music size={20} className="inline-block mr-2" />
+                  Audios
                 </button>
-
+              </div>
+              <div className="flex-1 text-center">
                 <button
-                  className={`flex items-center justify-center flex-1 py-2 space-x-2 ${
-                    activeTab === 'likes' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-500'
+                  className={`py-2 px-4 w-full text-sm font-medium transition-colors duration-200 ${
+                    activeTab === 'likes' ? 'border-b-2 border-blue-500 text-white' : 'text-gray-400 hover:text-white'
                   }`}
                   onClick={() => setActiveTab('likes')}
                 >
-                  <Heart size={20} />
-                  <span className="text-sm font-medium">Likes</span>
+                  <Heart size={20} className="inline-block mr-2" />
+                  Likes
                 </button>
-                
+              </div>
+              {isCurrentUser && (
+                <div className="flex-1 text-center">
                 <button
-                  className={`flex items-center justify-center flex-1 py-2 space-x-2 ${
-                    activeTab === 'saved' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-gray-500'
+                    className={`py-2 px-4 w-full text-sm font-medium transition-colors duration-200 ${
+                      activeTab === 'saved' ? 'border-b-2 border-blue-500 text-white' : 'text-gray-400 hover:text-white'
                   }`}
                   onClick={() => setActiveTab('saved')}
                 >
-                  <Bookmark size={20} />
-                  <span className="text-sm font-medium">Saved</span>
+                    <Bookmark size={20} className="inline-block mr-2" />
+                    Saved
                 </button>
-              </>
+                </div>
             )}
+            </div>
           </div>
+        )}
           
           <div className="py-4">
             {renderContent()}
-          </div>
         </div>
       </div>
 
+      {showEditModal && profile && (
       <AnimatePresence>
-        {showEditModal && profile && (
           <EditProfileModal
             profile={profile}
             onClose={() => setShowEditModal(false)}
             onUpdate={fetchProfileData}
           />
+        </AnimatePresence>
         )}
-      </AnimatePresence>
 
+      {selectedVideo && (
       <AnimatePresence>
-        {selectedVideo && (
           <VideoViewer
             video={selectedVideo}
             onClose={() => setSelectedVideo(null)}
           />
+        </AnimatePresence>
         )}
-      </AnimatePresence>
     </div>
   );
 };

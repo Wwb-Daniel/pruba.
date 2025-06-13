@@ -42,14 +42,54 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
   const { likeVideo, saveVideo, deleteVideo, updateVideo, marcarVideoVisto } = useVideoStore();
   const { followUser, unfollowUser, isFollowing: checkIsFollowing } = useUserStore();
   const navigate = useNavigate();
+  const heartRef = useRef<HTMLDivElement>(null);
+  const [isLoadingLike, setIsLoadingLike] = useState(false);
+  const realtimeChannelRef = useRef<any>(null);
 
-  // Reset viewed state when video changes
+  // Reset viewed state and like status when video changes
   useEffect(() => {
     setHasMarkedAsViewed(false);
+    setIsLiked(false);
+    
+    const fetchInitialData = async () => {
+      await Promise.all([
+        (async () => {
+          // Fetch initial likes count
+          const { count: likesTotal, error: likesError } = await supabase
+            .from('likes')
+            .select('id', { count: 'exact', head: true })
+            .eq('content_id', video.id)
+            .eq('content_type', 'video');
+          
+          if (likesError) {
+            console.error('Error fetching initial likes count:', likesError);
     setLikesCount(video.likes_count || 0);
+          } else {
+            setLikesCount(likesTotal || 0);
+          }
+        })(),
+        (async () => {
+          // Fetch initial comments count
+          const { count: commentsTotal, error: commentsError } = await supabase
+            .from('comments')
+            .select('id', { count: 'exact', head: true })
+            .eq('content_id', video.id)
+            .eq('content_type', 'video');
+
+          if (commentsError) {
+            console.error('Error fetching initial comments count:', commentsError);
     setCommentsCount(video.comments_count || 0);
-    setAudioTrack(video.audio_track || null);
-  }, [video.id, video.likes_count, video.comments_count, video.audio_track]);
+          } else {
+            setCommentsCount(commentsTotal || 0);
+          }
+        })(),
+        checkLikeStatus() // Asegurarse de que el estado de isLiked se actualice
+      ]);
+    };
+
+    fetchInitialData();
+
+  }, [video.id]); // Eliminado video.likes_count y video.comments_count de las dependencias ya que se manejan explícitamente
 
   // Fetch audio track if video has audio_track_id but no audio_track data
   useEffect(() => {
@@ -96,24 +136,160 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
     checkFollowStatus();
   }, [video.user_id, checkIsFollowing]);
 
-  // Check if video is liked by current user
-  useEffect(() => {
+  // Check if video is liked by current user - Mejorado para manejar errores y reconexión
     const checkLikeStatus = async () => {
+    try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      console.log(`checkLikeStatus: User ID: ${user?.id || 'Not authenticated'}`);
+      if (!user) {
+        setIsLiked(false);
+        console.log(`checkLikeStatus: Not authenticated, setting isLiked to false.`);
+        return;
+      }
 
-      const { data } = await supabase
+      // Fetch like status for current user
+      const { data: userLikeData, error: userLikeError } = await supabase
         .from('likes')
-        .select()
+        .select('id')
         .eq('user_id', user.id)
         .eq('content_id', video.id)
         .eq('content_type', 'video')
         .maybeSingle();
 
-      setIsLiked(!!data);
+      console.log('checkLikeStatus: User like data:', userLikeData, 'Error:', userLikeError);
+
+      if (userLikeError) {
+        console.error('Error checking like status:', userLikeError);
+        setIsLiked(false);
+        return;
+      }
+      setIsLiked(!!userLikeData);
+
+    } catch (error: any) {
+      console.error('Error in checkLikeStatus:', error);
+      setIsLiked(false);
+      console.log(`checkLikeStatus: General error, setting isLiked to false.`);
+    }
+  };
+
+  const fetchCommentsCount = async () => {
+    try {
+      const { count, error } = await supabase
+        .from('comments')
+        .select('id', { count: 'exact', head: true })
+        .eq('content_id', video.id)
+        .eq('content_type', 'video');
+
+      if (error) {
+        console.error('Error fetching comments count:', error);
+        setCommentsCount(video.comments_count || 0);
+      } else {
+        setCommentsCount(count || 0);
+      }
+    } catch (error) {
+      console.error('Error in fetchCommentsCount:', error);
+      setCommentsCount(video.comments_count || 0);
+    }
+  };
+
+  // Setup realtime subscription
+  useEffect(() => {
+    // Cleanup any existing channel from previous renders/effects
+    // This ensures only one channel is active for the current video.id
+    if (realtimeChannelRef.current) {
+      console.log(`Realtime: Cleaning up existing channel for video ${video.id}`);
+      supabase.removeChannel(realtimeChannelRef.current).catch(console.error);
+      realtimeChannelRef.current = null;
+    }
+
+    let likeChannel: any = null; // Local variable to hold the channel for current effect run
+    let commentChannel: any = null; // Channel for comments
+
+    try {
+      console.log(`Realtime: Attempting to subscribe to likes for video ${video.id}`);
+      likeChannel = supabase
+        .channel(`likes-${video.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'likes',
+            filter: `content_id=eq.${video.id}`
+          },
+          async () => {
+            console.log(`Realtime: Change detected for likes for video ${video.id}. Checking like status.`);
+            await checkLikeStatus();
+          }
+        )
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            console.log(`Realtime: Suscrito a cambios de likes para video ${video.id}`);
+            // No almacenar en realtimeChannelRef.current directamente aquí, ya que manejaremos múltiples canales
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error(`Realtime: Error en el canal de likes para video ${video.id}`);
+          } else if (status === 'TIMED_OUT') {
+            console.warn(`Realtime: Suscripción a likes para video ${video.id} ha excedido el tiempo de espera`);
+          } else if (status === 'CLOSED') {
+            console.log(`Realtime: Canal de likes cerrado para video ${video.id}`);
+          }
+        });
+
+      console.log(`Realtime: Attempting to subscribe to comments for video ${video.id}`);
+      commentChannel = supabase
+        .channel(`comments-${video.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'comments',
+            filter: `content_id=eq.${video.id}`
+          },
+          async () => {
+            console.log(`Realtime: Change detected for comments for video ${video.id}. Fetching new comment count.`);
+            const { count, error } = await supabase
+              .from('comments')
+              .select('id', { count: 'exact', head: true })
+              .eq('content_id', video.id)
+              .eq('content_type', 'video');
+
+            if (error) {
+              console.error('Error fetching comment count in realtime:', error);
+            } else {
+              setCommentsCount(count || 0);
+              console.log(`Realtime: New comment count for video ${video.id}: ${count}`);
+            }
+          }
+        )
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            console.log(`Realtime: Suscrito a cambios de comentarios para video ${video.id}`);
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error(`Realtime: Error en el canal de comentarios para video ${video.id}`);
+          } else if (status === 'TIMED_OUT') {
+            console.warn(`Realtime: Suscripción a comentarios para video ${video.id} ha excedido el tiempo de espera`);
+          } else if (status === 'CLOSED') {
+            console.log(`Realtime: Canal de comentarios cerrado para video ${video.id}`);
+          }
+        });
+
+    } catch (error) {
+      console.error('Realtime: Error configurando suscripción en tiempo real:', error);
+    }
+
+    // Cleanup function: runs when video.id changes or component unmounts
+    return () => {
+      if (likeChannel) {
+        console.log(`Realtime: Desuscrito (cleanup) del canal de likes para video ${video.id}`);
+        supabase.removeChannel(likeChannel).catch(console.error);
+      }
+      if (commentChannel) {
+        console.log(`Realtime: Desuscrito (cleanup) del canal de comentarios para video ${video.id}`);
+        supabase.removeChannel(commentChannel).catch(console.error);
+      }
     };
-    checkLikeStatus();
-  }, [video.id]);
+  }, [video.id, checkLikeStatus]);
 
   // Check if video is saved by current user
   useEffect(() => {
@@ -137,6 +313,7 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
   useEffect(() => {
     let playTimeout: NodeJS.Timeout;
     let isPlayingPromise: Promise<void> | null = null;
+    let viewTimeout: NodeJS.Timeout;
 
     if (videoRef.current) {
       if (isActive) {
@@ -163,10 +340,17 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
             setIsPlaying(true);
             setShowPlayButton(false);
             
-            // Marcar video como visto
+            // Marcar video como visto después de un breve retraso
             if (!hasMarkedAsViewed) {
+              viewTimeout = setTimeout(async () => {
+                try {
               await marcarVideoVisto(video.id);
               setHasMarkedAsViewed(true);
+                } catch (error) {
+                  console.error('Error marking video as viewed:', error);
+                  // No actualizar hasMarkedAsViewed si hay error
+                }
+              }, 2000); // Esperar 2 segundos antes de marcar como visto
             }
           } catch (error: any) {
             console.error('Error playing video:', error);
@@ -178,7 +362,6 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
         };
         playVideo();
       } else {
-        // Solo pausar el video cuando no está activo
         if (isPlayingPromise) {
           videoRef.current?.pause();
           isPlayingPromise = null;
@@ -188,15 +371,15 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
       }
     }
 
-    // Cleanup function
     return () => {
       clearTimeout(playTimeout);
+      clearTimeout(viewTimeout);
       if (videoRef.current) {
         videoRef.current.pause();
         setIsPlaying(false);
       }
     };
-  }, [isActive, video.id, marcarVideoVisto, setHasMarkedAsViewed, hasMarkedAsViewed, videoRef, setIsPlaying, setShowPlayButton]);
+  }, [isActive, video.id, marcarVideoVisto, hasMarkedAsViewed]);
 
   // Configurar los niveles de volumen iniciales
   useEffect(() => {
@@ -210,22 +393,25 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
 
   const togglePlay = async () => {
     if (videoRef.current) {
-      try {
         if (isPlaying) {
           videoRef.current.pause();
           setIsPlaying(false);
           setShowPlayButton(true);
         } else {
-          // Esperar un momento antes de intentar reproducir
-          await new Promise(resolve => setTimeout(resolve, 100));
-          await videoRef.current.play();
+        try {
+          const playPromise = videoRef.current.play();
+          if (playPromise) {
+            await playPromise;
+          }
           setIsPlaying(true);
           setShowPlayButton(false);
-        }
+          // La lógica para marcar como visto se maneja en el useEffect principal
+          // No es necesario duplicarla aquí
       } catch (error) {
-        console.error('Error toggling play:', error);
+          console.error('Error al reproducir el video:', error);
         setIsPlaying(false);
         setShowPlayButton(true);
+        }
       }
     }
   };
@@ -233,51 +419,35 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
   const toggleMute = () => {
     if (videoRef.current) {
       videoRef.current.muted = !videoRef.current.muted;
-      setIsMuted(!isMuted);
+      setIsMuted(videoRef.current.muted);
     }
   };
 
-  const handleLike = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleLike = async () => {
+    if (isLoadingLike) return;
+    
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
-
-      if (!isLiked) {
-        // Add like
-        const { error } = await supabase
-          .from('likes')
-          .insert({
-            user_id: user.id,
-            content_id: video.id,
-            content_type: 'video',
-            video_id: video.id
-          });
-
-        if (error) {
-          // If it's a unique constraint violation, the like already exists
-          if (error.code === '23505') {
-            console.log('Like already exists');
-            return;
-          }
-          throw error;
-        }
-
-        // Update local state immediately with animation
-        setIsLiked(true);
-        setLikesCount(prev => prev + 1);
-        
-        // Add pulse animation
-        const heartElement = e.currentTarget.querySelector('.heart-icon');
-        if (heartElement) {
-          heartElement.classList.add('pulse-heart');
+      setIsLoadingLike(true);
+      const wasLiked = await likeVideo(video.id);
+      
+      // Actualizar estado local inmediatamente
+      setIsLiked(wasLiked);
+      setLikesCount(prev => Math.max(0, wasLiked ? prev + 1 : prev - 1));
+      
+      // Animar el corazón
+      if (heartRef.current) {
+        heartRef.current.classList.add('animate-heart');
           setTimeout(() => {
-            heartElement.classList.remove('pulse-heart');
-          }, 300);
-        }
+          heartRef.current?.classList.remove('animate-heart');
+        }, 1000);
       }
     } catch (error) {
-      console.error('Error adding like:', error);
+      console.error('Error toggling like:', error);
+      // Revertir el estado local en caso de error
+      setIsLiked(!isLiked);
+      setLikesCount(prev => Math.max(0, isLiked ? prev - 1 : prev + 1));
+    } finally {
+      setIsLoadingLike(false);
     }
   };
 
@@ -479,11 +649,12 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
       <div className="absolute right-4 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center space-y-4">
         <motion.button
           whileTap={{ scale: 1.1 }}
-          className="flex flex-col items-center video-control"
+          className={`flex flex-col items-center video-control`}
           onClick={handleLike}
+          disabled={isLoadingLike}
         >
-          <div className={`w-12 h-12 rounded-full bg-gray-800 bg-opacity-70 flex items-center justify-center ${isLiked ? 'text-red-500' : 'text-white'}`}>
-            <Heart size={24} fill={isLiked ? "currentColor" : "none"} className="heart-icon" />
+          <div className="w-12 h-12 rounded-full bg-gray-800 bg-opacity-70 flex items-center justify-center">
+            <Heart size={24} fill={isLiked ? '#E0245E' : 'none'} stroke={isLiked ? '#E0245E' : 'white'} />
           </div>
           <span className="text-xs mt-1">{formatCount(likesCount)}</span>
         </motion.button>

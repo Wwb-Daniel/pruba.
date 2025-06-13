@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Bell, X, Heart, MessageCircle, UserPlus, Eye } from 'lucide-react';
+import { Bell, X, Heart, MessageCircle, UserPlus, Eye, AtSign } from 'lucide-react';
 import { useNotificationStore } from '../../store/notificationStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -32,11 +32,14 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose }) => {
       case 'like':
         return <Heart size={20} className="text-red-500" />;
       case 'comment':
+      case 'comment_reply':
         return <MessageCircle size={20} className="text-blue-500" />;
+      case 'mention':
+        return <AtSign size={20} className="text-purple-500" />;
       case 'follow':
         return <UserPlus size={20} className="text-green-500" />;
       case 'message':
-        return <MessageCircle size={20} className="text-purple-500" />;
+        return <MessageCircle size={20} className="text-yellow-500" />;
       default:
         return <Bell size={20} />;
     }
@@ -46,15 +49,19 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose }) => {
     const username = notification.actor_profile?.username || 'Someone';
     switch (notification.type) {
       case 'like':
-        return `${username} liked your video`;
+        return `${username} dio like a tu contenido`;
       case 'comment':
-        return `${username} commented on your video`;
+        return `${username} comentó en tu video`;
+      case 'comment_reply':
+        return `${username} respondió a tu comentario`;
+      case 'mention':
+        return `${username} te mencionó en un comentario`;
       case 'follow':
-        return `${username} started following you`;
+        return `${username} empezó a seguirte`;
       case 'message':
-        return `${username} sent you a message`;
+        return `${username} te envió un mensaje`;
       default:
-        return 'New notification';
+        return 'Nueva notificación';
     }
   };
 

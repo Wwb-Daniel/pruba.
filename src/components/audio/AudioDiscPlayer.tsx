@@ -6,7 +6,7 @@ import type { AudioTrack } from '../../lib/supabase';
 interface AudioDiscPlayerProps {
   audioTrack: AudioTrack | null;
   isVideoPlaying: boolean;
-  onDiscClick?: () => void;
+  onDiscClick?: (event: React.MouseEvent) => void;
   size?: 'sm' | 'md' | 'lg';
 }
 
@@ -38,6 +38,8 @@ const AudioDiscPlayer: React.FC<AudioDiscPlayerProps> = ({
     lg: 16
   };
 
+  const imageUrl = audioTrack.user_profile?.avatar_url || audioTrack.cover_image_url || audioTrack.thumbnail_url;
+
   return (
     <div className="relative">
       <motion.div
@@ -54,10 +56,10 @@ const AudioDiscPlayer: React.FC<AudioDiscPlayerProps> = ({
         whileTap={{ scale: 0.95 }}
       >
         <div className={`${innerSizeClasses[size]} rounded-full bg-black flex items-center justify-center`}>
-          {audioTrack.cover_image_url || audioTrack.thumbnail_url ? (
+          {imageUrl ? (
             <img
-              src={audioTrack.cover_image_url || audioTrack.thumbnail_url}
-              alt={audioTrack.title}
+              src={imageUrl}
+              alt={audioTrack.title || 'Audio cover'}
               className={`${innerSizeClasses[size]} rounded-full object-cover`}
             />
           ) : (

@@ -11,7 +11,7 @@ const VideoFeed: React.FC = () => {
   
   // Initialize videos
   useEffect(() => {
-    fetchVideos();
+    fetchVideos(0); // Pass the required page argument
   }, [fetchVideos]);
   
   // Set up infinite scroll
@@ -25,7 +25,7 @@ const VideoFeed: React.FC = () => {
     observerRef.current = new IntersectionObserver((entries) => {
       const [entry] = entries;
       if (entry.isIntersecting && hasMore && !loading) {
-        fetchVideos(Math.floor(videos.length / 5));
+        fetchVideos(Math.floor(videos.length / 5)); // Pass the page number
       }
     }, options);
     
@@ -55,7 +55,7 @@ const VideoFeed: React.FC = () => {
   if (videos.length === 0 && !loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-center p-4">
-        <img src="/logo.svg" alt="VideoNew" className="w-24 h-24 mb-6" />
+        <img src="/logo (2).png" alt="OmniPlay" className="w-24 h-24 mb-6" />
         <h2 className="text-2xl font-bold mb-2">No videos yet</h2>
         <p className="text-gray-400 mb-6">Be the first to upload a video and start the trend!</p>
       </div>

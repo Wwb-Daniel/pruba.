@@ -1,11 +1,11 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
-import Navbar from './Navbar';
+import ImprovedNavbar from './ImprovedNavbar';
 
 const AppLayout: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
-      <Navbar />
+      <ImprovedNavbar />
       
       <main className="flex-1 overflow-hidden">
         <Outlet />

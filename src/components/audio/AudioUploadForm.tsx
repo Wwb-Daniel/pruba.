@@ -5,7 +5,12 @@ import { Upload, X, Music, Tag, Play, Pause } from 'lucide-react';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 
-const AudioUploadForm: React.FC = () => {
+interface AudioUploadFormProps {
+  onClose: () => void;
+  onUploadSuccess: () => void;
+}
+
+const AudioUploadForm: React.FC<AudioUploadFormProps> = ({ onClose, onUploadSuccess }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -201,7 +206,7 @@ const AudioUploadForm: React.FC = () => {
       setTitle('');
       setGenre('');
       setTags('');
-      window.location.reload(); // Recargar la página para mostrar el nuevo audio
+      onUploadSuccess();
     } catch (error: any) {
       console.error('Error uploading audio:', error);
       setError(error.message || 'Failed to upload audio track. Please try again.');

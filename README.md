@@ -27,12 +27,40 @@ OmniPlay is a modern video sharing application built with React, TypeScript, and
    ```
    npm install
    ```
-3. Set up environment variables by copying `.env.example` to `.env` and adding your Supabase credentials
+3. Set up environment variables:
+   - Copy `.env.example` to `.env`
+   - Add your Supabase credentials
 
 4. Start the development server:
    ```
    npm run dev
    ```
+
+## Environment Variables
+
+Create a `.env` file in the root directory with the following variables:
+
+```
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+## Deployment
+
+### Vercel Deployment
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Add environment variables in Vercel dashboard:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+4. Deploy
+
+### Manual Build
+
+```bash
+npm run build
+```
 
 ## Supabase Setup
 
@@ -40,26 +68,11 @@ Before running the application, you need to set up Supabase:
 
 1. Create a new Supabase project
 2. Run the SQL migration in `supabase/migrations/create_initial_schema.sql`
-3. Set up Storage bucket (REQUIRED):
+3. Set up Storage buckets (REQUIRED):
    - Go to Storage in your Supabase dashboard
-   - Click "Create new bucket"
-   - Name the bucket exactly "videos" (case-sensitive)
-   - Enable public access for the bucket
-   - Set the following CORS configuration for the bucket:
-     ```json
-     {
-       "cors_rules": [
-         {
-           "allowed_origins": ["*"],
-           "allowed_methods": ["GET", "POST", "PUT", "DELETE", "HEAD"],
-           "allowed_headers": ["*"],
-           "expose_headers": ["Content-Range", "Range"],
-           "max_age_seconds": 3000
-         }
-       ]
-     }
-     ```
-4. Update the `.env` file with your Supabase URL and anon key
+   - Create buckets: "videos", "audio_tracks", "avatars", "thumbnails"
+   - Enable public access for all buckets
+   - Set appropriate CORS configuration
 
 ## Project Structure
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Video } from '@/stores/videoStore';
+import type { Video } from '../lib/supabase';
 
 interface VideoCardProps {
   video: Video;
@@ -11,7 +11,6 @@ export function VideoCard({ video, className }: VideoCardProps) {
     <div className={`relative aspect-[9/16] rounded-lg overflow-hidden ${className}`}>
       <video
         src={video.video_url}
-        poster={video.thumbnail_url}
         className="w-full h-full object-cover"
         controls
         playsInline
@@ -24,4 +23,4 @@ export function VideoCard({ video, className }: VideoCardProps) {
       </div>
     </div>
   );
-} 
+}

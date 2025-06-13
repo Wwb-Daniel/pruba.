@@ -95,24 +95,89 @@ const SearchTabs: React.FC = () => {
   const searchUsers = async () => {
     let queryBuilder = supabase
       .from('profiles')
-      .select('*')
+      .select(`
+        id,
+        username,
+        avatar_url,
+        bio,
+        created_at
+      `)
       .or(`username.ilike.%${query}%,bio.ilike.%${query}%`);
 
     // Apply sorting
     switch (sortBy) {
       case 'popular':
-        queryBuilder = queryBuilder.order('followers_count', { ascending: false });
+        // Primero obtenemos los usuarios
+        const { data: users, error: usersError } = await queryBuilder.limit(20);
+        if (usersError) throw usersError;
+
+        // Luego obtenemos el conteo de seguidores para cada usuario
+        const usersWithFollowers = await Promise.all(
+          (users || []).map(async (user) => {
+            const { count } = await supabase
+              .from('follows')
+              .select('*', { count: 'exact', head: true })
+              .eq('following_id', user.id);
+            
+            return {
+              ...user,
+              followers_count: count || 0
+            };
+          })
+        );
+
+        // Ordenamos por número de seguidores
+        usersWithFollowers.sort((a, b) => b.followers_count - a.followers_count);
+        setUsers(usersWithFollowers);
         break;
+
       case 'recent':
         queryBuilder = queryBuilder.order('created_at', { ascending: false });
-        break;
-      default:
-        queryBuilder = queryBuilder.order('followers_count', { ascending: false });
-    }
+        const { data: recentUsers, error: recentError } = await queryBuilder.limit(20);
+        if (recentError) throw recentError;
 
-    const { data, error } = await queryBuilder.limit(20);
-    if (error) throw error;
-    setUsers(data || []);
+        // Obtenemos el conteo de seguidores para cada usuario
+        const recentUsersWithFollowers = await Promise.all(
+          (recentUsers || []).map(async (user) => {
+            const { count } = await supabase
+              .from('follows')
+              .select('*', { count: 'exact', head: true })
+              .eq('following_id', user.id);
+            
+            return {
+              ...user,
+              followers_count: count || 0
+            };
+          })
+        );
+
+        setUsers(recentUsersWithFollowers);
+        break;
+
+      default:
+        // Por defecto, ordenamos por popularidad
+        const { data: defaultUsers, error: defaultError } = await queryBuilder.limit(20);
+        if (defaultError) throw defaultError;
+
+        // Obtenemos el conteo de seguidores para cada usuario
+        const defaultUsersWithFollowers = await Promise.all(
+          (defaultUsers || []).map(async (user) => {
+            const { count } = await supabase
+              .from('follows')
+              .select('*', { count: 'exact', head: true })
+              .eq('following_id', user.id);
+            
+            return {
+              ...user,
+              followers_count: count || 0
+            };
+          })
+        );
+
+        // Ordenamos por número de seguidores
+        defaultUsersWithFollowers.sort((a, b) => b.followers_count - a.followers_count);
+        setUsers(defaultUsersWithFollowers);
+    }
   };
 
   const formatCount = (count: number): string => {
