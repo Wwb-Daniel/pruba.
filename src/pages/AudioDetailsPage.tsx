@@ -173,11 +173,11 @@ const AudioDetailsPage: React.FC = () => {
             {/* Audio Disc */}
             <div className="flex-shrink-0">
               <div onClick={togglePlay} className="cursor-pointer">
-                <AudioDiscPlayer
-                  audioTrack={audioTrack}
+              <AudioDiscPlayer
+                audioTrack={audioTrack}
                   isVideoPlaying={isPlaying}
-                  size="lg"
-                />
+                size="lg"
+              />
                 <div className="mt-2 text-center">
                   <span className="text-sm text-gray-400">
                     {formatDuration(currentTime)} / {formatDuration(duration)}

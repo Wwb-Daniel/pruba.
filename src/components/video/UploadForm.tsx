@@ -452,12 +452,12 @@ const UploadForm: React.FC = () => {
             Cancelar
           </Button>
           <Button
-            type="submit"
+          type="submit"
             variant="primary"
             className="flex-1 py-2.5"
-            disabled={!selectedFile || !title || isUploading}
-          >
-            {isUploading ? 'Subiendo...' : 'Subir video'}
+          disabled={!selectedFile || !title || isUploading}
+        >
+          {isUploading ? 'Subiendo...' : 'Subir video'}
           </Button>
         </div>
 

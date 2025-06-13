@@ -160,13 +160,13 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
               await isPlayingPromise;
             }
             
-            setIsPlaying(true);
-            setShowPlayButton(false);
-            
+              setIsPlaying(true);
+              setShowPlayButton(false);
+              
             // Marcar video como visto
-            if (!hasMarkedAsViewed) {
-              await marcarVideoVisto(video.id);
-              setHasMarkedAsViewed(true);
+              if (!hasMarkedAsViewed) {
+                    await marcarVideoVisto(video.id);
+                    setHasMarkedAsViewed(true);
             }
           } catch (error: any) {
             console.error('Error playing video:', error);
@@ -295,7 +295,7 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
   const confirmDelete = async () => {
     if (typeof video.id === 'string') {
       try {
-        await deleteVideo(video.id);
+      await deleteVideo(video.id);
         setShowDeleteModal(false);
         setShowSuccessMessage(true);
         
@@ -305,7 +305,7 @@ const VideoPlayer = ({ video, isActive }: VideoPlayerProps): JSX.Element => {
         
         setTimeout(() => {
           setShowSuccessMessage(false);
-          navigate('/');
+      navigate('/');
         }, 3000);
       } catch (error) {
         console.error('Error al eliminar el video:', error);

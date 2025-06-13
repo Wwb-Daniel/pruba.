@@ -122,7 +122,7 @@ const ProfileVisitors: React.FC<ProfileVisitorsProps> = ({ profileId }) => {
         <div className="animate-pulse">
           <div className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center">
             <Eye size={20} className="text-gray-600" />
-          </div>
+        </div>
         </div>
       </div>
     );
@@ -144,7 +144,7 @@ const ProfileVisitors: React.FC<ProfileVisitorsProps> = ({ profileId }) => {
                 {unviewedCount}
               </div>
             )}
-          </div>
+        </div>
         </button>
       )}
 
@@ -170,56 +170,56 @@ const ProfileVisitors: React.FC<ProfileVisitorsProps> = ({ profileId }) => {
                   <Eye size={20} />
                   <h2 className="text-lg font-semibold">Visitantes Recientes</h2>
                 </div>
-                <button
+            <button
                   onClick={() => setShowModal(false)}
                   className="text-gray-400 hover:text-white"
-                >
+            >
                   <X size={24} />
-                </button>
-              </div>
+            </button>
+          </div>
 
               <div className="overflow-y-auto max-h-[60vh]">
                 {visitors.length === 0 ? (
                   <div className="p-8 text-center">
                     <Eye size={48} className="mx-auto text-gray-600 mb-4" />
                     <p className="text-gray-400">No hay visitantes recientes</p>
-                  </div>
+      </div>
                 ) : (
                   <div className="divide-y divide-gray-800">
-                    {visitors.map((visitor) => (
-                      <Link
-                        key={visitor.id}
-                        to={`/profile/${visitor.id}`}
+        {visitors.map((visitor) => (
+          <Link
+            key={visitor.id}
+            to={`/profile/${visitor.id}`}
                         onClick={() => setShowModal(false)}
                         className="block p-4 hover:bg-gray-800 transition-colors"
-                      >
+          >
                         <div className="flex items-center space-x-3">
-                          {visitor.avatar_url ? (
-                            <img
-                              src={visitor.avatar_url}
-                              alt={visitor.username}
+              {visitor.avatar_url ? (
+                <img
+                  src={visitor.avatar_url}
+                  alt={visitor.username}
                               className="w-12 h-12 rounded-full object-cover"
-                            />
-                          ) : (
+                />
+              ) : (
                             <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center">
                               <User size={24} />
-                            </div>
-                          )}
+                </div>
+              )}
                           <div className="flex-1 min-w-0">
                             <p className="font-medium">@{visitor.username}</p>
                             <p className="text-xs text-gray-400 mt-1">
-                              {formatDistanceToNow(new Date(visitor.visited_at), { addSuffix: true }).replace('about ', '')}
-                            </p>
+              {formatDistanceToNow(new Date(visitor.visited_at), { addSuffix: true }).replace('about ', '')}
+            </p>
                           </div>
                           {!visitor.viewed && (
                             <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                           )}
                         </div>
-                      </Link>
-                    ))}
-                  </div>
+          </Link>
+        ))}
+      </div>
                 )}
-              </div>
+    </div>
             </motion.div>
           </motion.div>
         )}

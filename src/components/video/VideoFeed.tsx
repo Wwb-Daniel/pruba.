@@ -1,7 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useVideoStore } from '../../store/videoStore';
 import VideoPlayer from './VideoPlayer';
 import { motion } from 'framer-motion';
+import { supabase } from '../../lib/supabase';
+
+interface FetchVideosParams {
+  page: number;
+  limit: number;
+  category?: string;
+  userId?: string;
+}
 
 const VideoFeed: React.FC = () => {
   const { videos, loading, error, hasMore, fetchVideos } = useVideoStore();
@@ -11,7 +19,7 @@ const VideoFeed: React.FC = () => {
   
   // Initialize videos
   useEffect(() => {
-    fetchVideos();
+    fetchVideos({ page: 1, limit: 10 });
   }, [fetchVideos]);
   
   // Set up infinite scroll
